@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 from dataIO import read_cntl_inp_xml, read_inp_xml,\
                     read_output_file, show_graph, change_inp_xml
@@ -46,20 +45,16 @@ class PeakSearchProcess:
         os.chdir (self.folder)
 
         result = subprocess.run ('PeakSearch.exe')
-        print ('result !!!!!!!!!!!!!!!!!!!!!!',result)
         #os.remove ('PeakSearch.exe')
         os.chdir (cwd)
 
     def graph (self,):
         df, peakDf = self.put_result ()
-        print (df.head())
-        print (peakDf.head())
         path_graph = os.path.join (self.folder, 'graph.html')
         show_graph (df, peakDf, path_graph)
 
     def put_result (self,):
         path = os.path.join (self.folder, self.output_file)
-        print (path)
         df, peakDf = read_output_file (path)
         return df, peakDf
 
