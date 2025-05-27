@@ -1,5 +1,4 @@
-python-3.11
 pandas
 numpy
 streamlit
-plotly
+plotly==5.18.0
