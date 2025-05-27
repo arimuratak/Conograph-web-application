@@ -9,8 +9,6 @@ from data import PeakSearchProcess
 class PeakSearchMenu:
     def __init__ (self, lang):
         self.workSpace = '../PeakSearch'
-        #assert os.path.exists (
-        #    os.path.join (self.workSpace, 'PeakSearch.exe'))
         
         self.lang = lang
         self.folder = None
