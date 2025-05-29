@@ -1,5 +1,6 @@
 import os
 import shutil
+import numpy as np
 import streamlit as st
 from messages import messages as mess
 from dataIO import read_cntl_inp_xml, read_inp_xml,\
@@ -38,6 +39,7 @@ class PeakSearchMenu:
         self.out_path = os.path.join (folder, out_path)
         self.out_work_path = os.path.join (self.workSpace, out_path)
         self.params = read_inp_xml (self.param_path)
+        #print (self.params)
         self.move2workSpace (out_path)
         self.objPeakSearch = PeakSearchProcess (self.lang)
         #print (self.params)
@@ -118,6 +120,18 @@ class PeakSearchMenu:
         return select
 
     def kaplha2Param (self,):
+        mat = np.array ([
+            [0.5594075, 0.563798],
+            [0.709300, 0.713590],
+            [1.540562, 1.544398],
+            [1.788965, 1.792850],
+            [1.936042, 1.939980],
+            [2.289700, 2.293606]])
+        kalpha1, kalpha2 = self.params[-1]
+        kalphas = np.array ([[kalpha1, kalpha2]])
+        dist = np.sqrt (np.power (mat - kalphas, 2).sum(axis = 1))
+        idx = np.argmin (dist)
+
         params = [
             'Ag / 0.5594075 / 0.563798',
             'Mo / 0.709300 / 0.713590',
@@ -128,7 +142,7 @@ class PeakSearchMenu:
         
         sel = st.selectbox (
             self.mess['wavelen_mes'],
-            params)
+            params, index = int (idx))
         
         kalpha1, kalpha2 = sel.split (' / ')[1:]
         #st.write (kalpha1, kalpha2)
@@ -146,7 +160,7 @@ class PeakSearchMenu:
         df, peakDf = self.objPeakSearch.put_result ()
         return df, peakDf
 
-    def operationParam (self, params):
+    def operationParam (self, params, savePath):
         #nPoins = params['nPoints']; endRegion = params['endRegion']
         minRange = params['minRange'] #; maxRange = params['maxRange']
         #c_fixed = params['c_fixed'];
@@ -159,14 +173,50 @@ class PeakSearchMenu:
         if (kalpha1 == None) | (kalpha2 == None):
             params['kalpha1'], params['kalpha2'] = self.params[-1]
 
-        change_inp_xml (params, self.param_work_path)
+        change_inp_xml (params, savePath)
 
+    def readDefaultParam (self,):
+        params = read_inp_xml (self.param_path)
+        text = ''
+        smoothing_params = params[0]
+        nPoints = smoothing_params['NumberOfPoints'][0]
+        endRegion = smoothing_params['EndOfRegion'][0]
+        range_begin, range_end = params[1]
+        threshold, useErr = params[2]
+        alpha2_correction = params[3]
+        kalpha1, kalpha2 = params[4]
 
+        text += {'eng':'Smoothing / ', 'jpn' : '平滑化 / '}[self.lang]
+        text += self.mess['tbl_col1'] + ' : {}, '.format (nPoints)
+        text += self.mess['tbl_col2'] + ' : {}  \n'.format (endRegion)
+
+        text += self.mess['area_mes'] + ' / '
+        text += 'min : {}, max : {}  \n'.format (range_begin, range_end)
+        text += {'eng':'threshold', 'jpn' : 'しきい値'}[self.lang] + ' / '
+        text += 'c : {}, '.format (threshold)
+        text += {0 : self.mess['th_sel_2'],
+                 1 : self.mess['th_sel_1']
+                 }[int (useErr)] + '  \n'
+
+        text += self.mess['delpk_mes'] + ' / '
+        text += {0 : self.mess['exec_sel_2'],
+                 1 : self.mess['exec_sel_1']
+                 }[int (alpha2_correction)] + '  \n'
+        
+        text += 'kα1 : {}, kα2 : {}'.format (kalpha1, kalpha2)
+        return text
+
+    def updateParamFile (self, ans):
+        saveParam = st.button (
+            {'eng' : 'Save parameters',
+             'jpn':'パラメータ保存'}[self.lang])
+        if saveParam:
+            change_inp_xml (ans, self.param_path)
 
     def menu (self,):
         #st.write (self.mess['param'])
         ans = {k : None for k in [
-            'exec', 'df', 'peakDf', 'nPoints', 'endRegion',
+            'defaultParam', 'df', 'peakDf', 'nPoints', 'endRegion',
             'minRange, maxRange, c_fixed', 'useErr','select',
             'kalpha1', 'kalpha2', 'folder']}
         base_folder = st.text_input (
@@ -185,31 +235,30 @@ class PeakSearchMenu:
         self.setObjPeakSearch (folder)
 
 
-        #ans['exec'] = st.button ({'eng' : 'Exec', 'jpn' : '実行'
-        #                   }[self.lang])
-        
-        #if ans['exec']:
-        #    ans['df'], ans['peakDf'] = self.peaksearch (folder)
+        dispDefaultParam = st.toggle ({
+            'eng' : 'Default Parameter',
+            'jpn' : 'パラメータ初期値'}[self.lang])
+        if dispDefaultParam:
+            text = self.readDefaultParam ()
+            st.write (text)
 
         st.write (self.mess['smth_mes'])
         ans['nPoints'], ans['endRegion'] = self.smthParams ()
-        #print (nPoints, endRegion)
 
         st.write (self.mess['area_mes'])
         ans['minRange'], ans['maxRange'] = self.rangeParam()
-        #print (minRange, maxRange)
         st.write (self.mess['th_mes'])
         ans['c_fixed'],  ans['useErr'] = self.thresholdParam()
-        #print (c_fixed, select)
         select = self.kalpha2Select ()
         ans['select'] = select
         
         if select == self.mess['exec_sel_1']:
             ans['kalpha1'], ans['kalpha2'] = self.kaplha2Param ()
 
-        #change_inp_xml (ans, self.param_work_path)
-        self.operationParam (ans)
+        self.operationParam (ans, self.param_work_path)
         ans['df'], ans['peakDf'] = self.peaksearch ()
+
+        self.updateParamFile (ans)
 
         return ans
 
@@ -250,12 +299,8 @@ if __name__ == '__main__':
     #----------------------------------------------------
     df, peakDf = out_pk_menu['df'], out_pk_menu['peakDf']
   
-
-    #print (peakDf.head())
     mes = mess[lang]['graph']
     df.columns = [ 'xphase', 'yphase', 'err_yphase', 'smth_yphase']
-    #print (df.head())
-
 
     sel_graph = st.radio (
             {'eng' : 'select graph or log',
@@ -279,15 +324,14 @@ if __name__ == '__main__':
             use_container_width = True)
     selected = edited_df.loc[edited_df[mes['sel']] == True]
     selected.columns = peakDf.columns
-    #print (selected.head())
+
     if select_menu == mess[lang]['peaksearch']['main']:
         with graph_area:
             if sel_graph == mes['diffPattern']:
                 fig = show_graph (df, selected, output = True, lang = lang)
                 st.plotly_chart (fig, use_container_width = True)
             else:
-                folder = out_pk_menu['folder']
-                path = os.path.join (folder, 'LOG_PEAKSEARCH.txt')
+                path = '../PeakSearch/LOG_PEAKSEARCH.txt'
                 with open (path, 'r', encoding = 'utf-8') as f:
                     content = f.read()
                 st.text_area ('log', content, height = 400)
